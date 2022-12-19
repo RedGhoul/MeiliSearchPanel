@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:meilisearch/meilisearch.dart';
+import 'package:meilisearchpanel/pages/login_page.dart';
+
+import '../utils/utils.dart';
 
 class SearchPage extends StatefulWidget {
-
   const SearchPage({super.key, required this.url, required this.password});
 
   // This widget is the home page of your application. It is stateful, meaning
@@ -23,145 +25,220 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
-
   final _formKey = GlobalKey<FormState>();
-  late SearchResult dataFrom = new SearchResult();
-  int _counter = 0;
+  late SearchResult _dataFrom = SearchResult();
+  late MeiliSearchClient _client;
+  List<String> _indexList = [];
+  String _dropdownIndexValue = "";
   bool _hasSearched = false;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _client = MeiliSearchClient(widget.url, widget.password);
+      _findAllIndexes();
+    } on Exception catch (exception) {
+      Utils.showAlertDialog(context, () {
+        Navigator.push(context, MaterialPageRoute(builder: (context) {
+          return LoginPage();
+        }));
+      });
+    } catch (error) {
+      Utils.showAlertDialog(context, () {
+        Navigator.push(context, MaterialPageRoute(builder: (context) {
+          return LoginPage();
+        }));
+      });
+    }
+  }
+
+  void _findAllIndexes() async {
+    var indexes = await _client.getIndexes();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      for (var element in indexes.results) {
+        _indexList.add(element.uid);
+      }
     });
   }
 
   void _searchIndexes(String? query) async {
-    final _client = MeiliSearchClient(widget.url, widget.password);
-    var index = _client.index('movies');
-    var result = await index.search(query);
-    setState(() {
-      dataFrom = result;
-      _hasSearched = true;
-    });
+    if (_dropdownIndexValue.isNotEmpty) {
+      var index = _client.index(_dropdownIndexValue);
+      var result = await index.search(query);
+      setState(() {
+        _dataFrom = result;
+        _hasSearched = true;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text("Search"),
+        title: const Text("Search"),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    // The validator receives the text that the user has entered.
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter some text';
-                      }
-                      return null;
-                    },
-                    onChanged: (text) {
-                      _searchIndexes(text);
-                    },
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(30.0),
+                child: SizedBox(
+                  height: 200,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          "Query",
+                          style: TextStyle(fontSize: 20),
+                        ),
+                        SizedBox(
+                          width: 400,
+                          child: TextFormField(
+                            decoration: const InputDecoration(hintText: ""),
+                            // The validator receives the text that the user has entered.
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter some text';
+                              }
+                              return null;
+                            },
+                            onChanged: (text) {
+                              _searchIndexes(text);
+                            },
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.all(18.0),
+                          child: Text(
+                            "Indexes",
+                            style: TextStyle(fontSize: 20),
+                          ),
+                        ),
+                        DropdownButton<String>(
+                          value: _indexList.isNotEmpty
+                              ? _dropdownIndexValue
+                              : "None Found",
+                          onChanged: (String? value) {
+                            // This is called when the user selects an item.
+                            setState(() {
+                              _dropdownIndexValue = value!;
+                            });
+                          },
+                          items: _indexList
+                              .map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Validate returns true if the form is valid, or false otherwise.
-                        if (_formKey.currentState!.validate()) {
-                          // If the form is valid, display a snackbar. In the real world,
-                          // you'd often call a server or save the information in a database.
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Processing Data')),
-                          );
-                        }
-                      },
-                      child: const Text('Submit'),
+                ),
+              ),
+            ],
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 10,
+                headingRowColor: MaterialStateProperty.all(Colors.blue),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(
+                      color: Colors.grey,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                columns: _hasSearched && _dataFrom.hits != null
+                    ? _dataFrom.hits!
+                    .map((element) {
+                  List<DataColumn> sss = [];
+                  element.forEach((key, value) {
+                    sss.add(DataColumn(
+                      label: Expanded(
+                        child: Text(
+                          key.toString().toUpperCase(),
+                          style: TextStyle(fontStyle: FontStyle.normal),
+                        ),
+                      ),
+                    ));
+                  });
+                  return sss;
+                })
+                    .toList()
+                    .first
+                    : [
+                  const DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'Index Id',
+                        style: TextStyle(fontStyle: FontStyle.normal),
+                      ),
+                    ),
+                  ),
+                  const DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'Age',
+                        style: TextStyle(fontStyle: FontStyle.normal),
+                      ),
+                    ),
+                  ),
+                  const DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'Role',
+                        style: TextStyle(fontStyle: FontStyle.normal),
+                      ),
                     ),
                   ),
                 ],
+                rows: _hasSearched && _dataFrom.hits != null
+                    ? _dataFrom.hits!.map((element) {
+                  List<DataCell> dataCell = [];
+                  element.forEach((key, value) {
+                    dataCell.add(DataCell(SizedBox(
+                      width: 200,
+                      child: Text(
+                        value.toString(),
+                        overflow: TextOverflow.clip,
+                        maxLines: 1,
+                      ),
+                    )));
+                  });
+                  return DataRow(
+                    cells: dataCell,
+                  );
+                }).toList()
+                    : [],
               ),
             ),
-            DataTable(
-              columns: const <DataColumn>[
-                DataColumn(
-                  label: Expanded(
-                    child: Text(
-                      'Name',
-                      style: TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Expanded(
-                    child: Text(
-                      'Age',
-                      style: TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                  ),
-                ),
-                DataColumn(
-                  label: Expanded(
-                    child: Text(
-                      'Role',
-                      style: TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                  ),
-                ),
-              ],
-              rows: _hasSearched ? dataFrom.hits!.map((element) {
-                List<DataCell> sss = [];
-
-                element.forEach((key, value) {
-                  sss.add(DataCell(Text(value.toString())));
-                });
-                return DataRow(
-                  cells: sss,
-                );
-              }).toList() :
-              [],
-            ),
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme
-                  .of(context)
-                  .textTheme
-                  .headline4,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        onPressed: () {
+          if (_formKey.currentState!.validate()) {
+            // If the form is valid, display a snackbar. In the real world,
+            // you'd often call a server or save the information in a database.
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Processing Data')),
+            );
+          }
+        },
+        tooltip: 'Search',
+        child: const Icon(Icons.search),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }

@@ -2,32 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:meilisearchpanel/pages/search_page.dart';
 
 import '../main.dart';
+import '../utils/utils.dart';
 
 class LoginPage extends StatelessWidget {
-  LoginPage({Key? key}) : super(key: key);
+  LoginPage({super.key,});
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  showAlertDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Error"),
-          content: const Text("Url or Password was not entered"),
-          actions: [
-            TextButton(
-              child: const Text("Return"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +63,10 @@ class LoginPage extends StatelessWidget {
                             return SearchPage(url: _urlController.value.text, password: _passwordController.value.text);
                           }));
                     }else{
-                      showAlertDialog(context);
+                      Utils.showAlertDialog(context,
+                          (){
+                            Navigator.of(context).pop();
+                          });
                     }
 
                   }, child: const Text("Sign In"))
